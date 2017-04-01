@@ -7,6 +7,11 @@
 
 #include "mcount-arch.h"
 
+#define TRACEPOINT_DEFINE
+#define TRACEPOINT_CREATE_PROBES
+#define TP_IP_PARAM func_addr
+#include "func-tp.h"
+
 _Atomic(int) lttng_mcount_ready = 0;
 static pthread_key_t td_key;
 static pthread_once_t td_key_once = PTHREAD_ONCE_INIT;
@@ -90,7 +95,10 @@ int mcount_entry(unsigned long *parent_loc, unsigned long child,
 
 	list_add(&sf->list, &tdp->stack);
 
-	printf("entry in %p from %p\n", (void*)child, (void*)*parent_loc);
+	/* trace with lttng */
+	tracepoint(lttng_mcount, func_entry,
+		   (void *)sf->child_ip,
+		   (void *)sf->parent_ip);
 
 	tdp->recursion_guard = 0;
 	return 0;
@@ -99,23 +107,23 @@ int mcount_entry(unsigned long *parent_loc, unsigned long child,
 unsigned long mcount_exit(long *retval)
 {
 	struct lttng_mcount_thread_data *tdp;
-	struct lttng_mcount_stack_frame *stack;
+	struct lttng_mcount_stack_frame *sf;
 	unsigned long retaddr;
 
 	tdp = mcount_get_thread_data();
 	tdp->recursion_guard = 1;
 
-	stack = list_entry(tdp->stack.next,
+	sf = list_entry(tdp->stack.next,
 			   struct lttng_mcount_stack_frame, list);
-	retaddr = stack->parent_ip;
+	retaddr = sf->parent_ip;
 
 	/* trace with lttng */
-	tracepoint(uftrace, func_exit,
-		   (void *)rstack->child_ip,
-		   (void *)rstack->parent_ip);
+	tracepoint(lttng_mcount, func_exit,
+		   (void *)sf->child_ip,
+		   (void *)sf->parent_ip);
 
-	list_del(&stack->list);
-	free(stack);
+	list_del(&sf->list);
+	free(sf);
 
 	tdp->recursion_guard = 0;
 
