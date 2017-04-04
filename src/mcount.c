@@ -1,6 +1,5 @@
 #include <malloc.h>
 #include <pthread.h>
-#include <stdio.h>
 
 #include "util/list.h"
 #include "util/compiler.h"
@@ -121,7 +120,7 @@ unsigned long mcount_exit(long *retval)
 	tdp->recursion_guard = 1;
 
 	sf = list_entry(tdp->stack.next,
-			   struct lttng_mcount_stack_frame, list);
+			struct lttng_mcount_stack_frame, list);
 	retaddr = sf->parent_ip;
 
 	/* trace with lttng */
