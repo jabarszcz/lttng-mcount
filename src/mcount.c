@@ -14,7 +14,6 @@
 
 _Atomic(int) lttng_mcount_ready = 0;
 static pthread_key_t td_key;
-static pthread_once_t td_key_once = PTHREAD_ONCE_INIT;
 
 struct lttng_mcount_stack_frame {
 	unsigned long child_ip;
@@ -27,11 +26,6 @@ struct lttng_mcount_thread_data {
 	struct list_head stack;
 };
 
-struct lttng_mcount_thread_data *mcount_get_thread_data()
-{
-	return pthread_getspecific(td_key);
-}
-
 static void mcount_thread_data_dtor(void *data)
 {
 	struct lttng_mcount_thread_data *tdp = data;
@@ -43,24 +37,37 @@ static void mcount_thread_data_dtor(void *data)
 	}
 }
 
-static void make_td_key()
+__attribute__((constructor))
+void mcount_init()
 {
+	struct lttng_mcount_thread_data *tdp;
+
 	(void) pthread_key_create(&td_key, mcount_thread_data_dtor);
+
+	lttng_mcount_ready = 1;
 }
 
-static void mcount_prepare()
+static void mcount_prepare_thread()
 {
 	struct lttng_mcount_thread_data *tdp =
 		malloc(sizeof(struct lttng_mcount_thread_data));
 
-	tdp->recursion_guard = 1;
+	tdp->recursion_guard = 0;
 	INIT_LIST_HEAD(&tdp->stack);
-
-	(void) pthread_once(&td_key_once, make_td_key);
 
 	(void) pthread_setspecific(td_key, tdp);
 }
 
+struct lttng_mcount_thread_data *mcount_get_thread_data()
+{
+	struct lttng_mcount_thread_data *tdp;
+	tdp = pthread_getspecific(td_key);
+	if(unlikely(!tdp)) {
+		mcount_prepare_thread();
+		tdp = pthread_getspecific(td_key);
+	}
+	return tdp;
+}
 
 static int mcount_should_stop()
 {
@@ -130,22 +137,6 @@ unsigned long mcount_exit(long *retval)
 	return retaddr;
 }
 
-void __visible_default __monstartup(unsigned long low, unsigned long high)
-{
-}
-
-void __visible_default _mcleanup(void)
-{
-}
-
-__attribute__((constructor))
-void mcount_init()
-{
-	struct lttng_mcount_thread_data *tdp;
-
-	mcount_prepare();
-
-	tdp = mcount_get_thread_data();
-	tdp->recursion_guard = 0;
-	lttng_mcount_ready = 1;
-}
+// Stub out gmon
+void __visible_default __monstartup(unsigned long low, unsigned long high) {}
+void __visible_default _mcleanup(void) {}
