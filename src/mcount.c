@@ -5,6 +5,7 @@
 #include "util/compiler.h"
 
 #include "mcount-arch.h"
+#include "dynamic.h"
 
 #define TRACEPOINT_DEFINE
 #define TRACEPOINT_CREATE_PROBES
@@ -42,6 +43,8 @@ void mcount_init()
 	struct lttng_mcount_thread_data *tdp;
 
 	(void) pthread_key_create(&td_key, mcount_thread_data_dtor);
+
+	dynamic_init();
 
 	lttng_mcount_ready = 1;
 }
