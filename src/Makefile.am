@@ -8,3 +8,6 @@ liblttng_mcount_la_CFLAGS = -include config.h -I@ARCHDIR@/ \
 	-fvisibility=hidden
 liblttng_mcount_la_LIBADD = -llttng-ust
 
+utilheadersdir = $(pkgincludedir)/util
+utilheaders_HEADERS = util/compiler.h
+pkginclude_HEADERS = dynamic.h
