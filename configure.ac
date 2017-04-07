@@ -30,7 +30,7 @@ AS_CASE([$host_cpu],
 AC_SUBST([ARCHDIR])
 
 
-AC_CONFIG_FILES([Makefile src/Makefile])
+AC_CONFIG_FILES([Makefile src/Makefile tests/Makefile])
 
 LT_INIT
 AC_OUTPUT
