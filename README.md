@@ -39,7 +39,7 @@ instrumentation of specific program functions:
     int get_instrumentation(unsigned long addr,
                             enum lttng_mcount_patch *status);
 
-Using these, a program can control it's own instrumentation
+Using these, a program can control its own instrumentation
 dynamically. Alternatively, another library can use this capability to
 provide a user interface, for instance. (*TODO insert link to TUI lib*)
 
