@@ -22,7 +22,7 @@ because only a single NOP is executed. The instrumentation put before
 the function also hijacks the return address to call function exit
 instrumentation.
 
-The options used by gcc to insert NOPs are the following:
+The options used by gcc (5.1+) to insert NOPs are the following:
 
     -pg -mfentry -mnop-mcount
 
@@ -51,6 +51,6 @@ from lttng-ust-cyg-profile.
 
 ## Drawbacks
 
-* Relies on gcc and flags specific to x86
+* Relies on gcc 5.1+ and flags specific to x86
 * Concurrent execution/mutation of a program might lead to problems
 * Recompilation needed
