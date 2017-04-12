@@ -41,7 +41,8 @@ instrumentation of specific program functions:
 
 Using these, a program can control its own instrumentation
 dynamically. Alternatively, another library can use this capability to
-provide a user interface, for instance. (*TODO insert link to TUI lib*)
+[provide a user interface](https://github.com/jabarszcz/dynamic_inst_tui),
+for instance. 
 
 An example program can be found in `tests/`.
 
