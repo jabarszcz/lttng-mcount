@@ -1,7 +1,6 @@
 #include <malloc.h>
 #include <pthread.h>
 
-#include "util/list.h"
 #include "util/compiler.h"
 
 #include "mcount-arch.h"
@@ -12,18 +11,21 @@
 #define TP_IP_PARAM func_addr
 #include "func-tp.h"
 
+#define DEFAULT_STACK_DEPTH 1024
+
 _Atomic(int) lttng_mcount_ready = 0;
 static pthread_key_t td_key;
 
 struct lttng_mcount_stack_frame {
 	unsigned long child_ip;
 	unsigned long parent_ip;
-	struct list_head list;
 };
 
 struct lttng_mcount_thread_data {
 	int recursion_guard;
-	struct list_head stack;
+	unsigned int max_stack_depth;
+	unsigned int cur_stack_idx;
+	struct lttng_mcount_stack_frame *stack;
 };
 
 static void mcount_thread_data_dtor(void *data)
@@ -31,17 +33,15 @@ static void mcount_thread_data_dtor(void *data)
 	struct lttng_mcount_thread_data *tdp = data;
 	struct lttng_mcount_stack_frame *pos = NULL, *next = NULL;
 
-	list_for_each_entry_safe(pos, next, &tdp->stack, list) {
-		list_del(&pos->list);
-		free(pos);
+	if (tdp->stack) {
+		free(tdp->stack);
+		tdp->stack = NULL;
 	}
 }
 
 __attribute__((constructor))
 void mcount_init()
 {
-	struct lttng_mcount_thread_data *tdp;
-
 	(void) pthread_key_create(&td_key, mcount_thread_data_dtor);
 
 	dynamic_init();
@@ -54,8 +54,12 @@ static void mcount_prepare_thread()
 	struct lttng_mcount_thread_data *tdp =
 		malloc(sizeof(struct lttng_mcount_thread_data));
 
+	tdp->max_stack_depth = DEFAULT_STACK_DEPTH;
 	tdp->recursion_guard = 0;
-	INIT_LIST_HEAD(&tdp->stack);
+	tdp->cur_stack_idx = 0;
+	tdp->stack = malloc(
+		sizeof(struct lttng_mcount_stack_frame) *
+		tdp->max_stack_depth);
 
 	(void) pthread_setspecific(td_key, tdp);
 }
@@ -95,14 +99,13 @@ int mcount_entry(unsigned long *parent_loc, unsigned long child,
 		return -1;
 
 	tdp = mcount_get_thread_data();
+	if (unlikely(tdp->cur_stack_idx >= tdp->max_stack_depth))
+		return -1;
 	tdp->recursion_guard = 1;
 
-	sf = malloc(sizeof(struct lttng_mcount_stack_frame));
+	sf = &tdp->stack[tdp->cur_stack_idx++];
 	sf->child_ip = child;
 	sf->parent_ip = *parent_loc;
-	INIT_LIST_HEAD(&sf->list);
-
-	list_add(&sf->list, &tdp->stack);
 
 	/* trace with lttng */
 	tracepoint(lttng_mcount, func_entry,
@@ -122,17 +125,13 @@ unsigned long mcount_exit(long *retval)
 	tdp = mcount_get_thread_data();
 	tdp->recursion_guard = 1;
 
-	sf = list_entry(tdp->stack.next,
-			struct lttng_mcount_stack_frame, list);
+	sf = &tdp->stack[--tdp->cur_stack_idx];
 	retaddr = sf->parent_ip;
 
 	/* trace with lttng */
 	tracepoint(lttng_mcount, func_exit,
 		   (void *)sf->child_ip,
 		   (void *)sf->parent_ip);
-
-	list_del(&sf->list);
-	free(sf);
 
 	tdp->recursion_guard = 0;
 
