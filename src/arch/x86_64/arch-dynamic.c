@@ -1,5 +1,6 @@
 #define _GNU_SOURCE
 #include <link.h>
+#include <stdatomic.h>
 #include <stdio.h>
 #include <string.h>
 #include <sys/mman.h>
@@ -128,7 +129,8 @@ int set_instrumentation(unsigned long addr, int enable)
 {
 	unsigned char nop[] = { 0x67, 0x0f, 0x1f, 0x04, 0x00 };
 	unsigned char call[5] = { 0xe8, 0x00, 0x00, 0x00, 0x00 };
-	unsigned char *insn = (void *)addr;
+	unsigned long new, old;
+	unsigned long *insn = (void *)addr;
 	unsigned int target_addr;
 
 	target_addr = get_target_addr(addr);
@@ -138,11 +140,17 @@ int set_instrumentation(unsigned long addr, int enable)
 	/* complete call instruction */
 	memcpy(&call[1], &target_addr, sizeof(target_addr));
 
-	if (!enable && !memcmp(insn, call, sizeof(call))) {
-		memcpy(insn, nop, sizeof(nop));
-	} else if (enable && !memcmp(insn, nop, sizeof(nop))) {
-		memcpy(insn, call, sizeof(call));
-	} else return -1;
+	/* loop for cas success */
+	do {
+		/* get original bytes */
+		new = old = *insn;
+
+		if (!enable && !memcmp(insn, call, sizeof(call))) {
+			memcpy(&new, nop, sizeof(nop));
+		} else if (enable && !memcmp(insn, nop, sizeof(nop))) {
+			memcpy(&new, call, sizeof(call));
+		} else return -1;
+	} while (!atomic_compare_exchange_weak(insn, &old, new));
 
 	return 0;
 }
