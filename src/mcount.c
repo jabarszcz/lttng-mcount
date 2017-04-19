@@ -1,5 +1,6 @@
 #include <malloc.h>
 #include <pthread.h>
+#include <stdatomic.h>
 
 #include "util/compiler.h"
 
@@ -46,7 +47,7 @@ void mcount_init()
 
 	dynamic_init();
 
-	lttng_mcount_ready = 1;
+	atomic_store(&lttng_mcount_ready, 1);
 }
 
 static void mcount_prepare_thread()
@@ -80,7 +81,7 @@ static int mcount_should_stop()
 	struct lttng_mcount_thread_data *tdp;
 
 	// Check global lock for complete init
-	if (unlikely(!lttng_mcount_ready))
+	if (unlikely(!atomic_load(&lttng_mcount_ready)))
 		return -1;
 	// Check thread-local lock to avoid infinite recursion
 	tdp = mcount_get_thread_data();
